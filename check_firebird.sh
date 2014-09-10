@@ -107,7 +107,28 @@ if [ -z $ACTION ]; then
     exit $NAGIOS_UNKNOWN
 fi
 
+function connection {
+# Simple connection check.
+
+FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
+SHOW DATABASE;
+EOF
+`
+RETVAL=$?
+if [ $RETVAL -eq 1 ]; then
+        echo "Nao foi possivel conexao com a base de dados $HOST:$DATABASE"
+        exit $NAGIOS_CRITICAL
+fi
+
+echo "OK: Connection to the database successfully established."
+exit $NAGIOS_OK
+}
+
 function timesync {
+#Compare database time to local system time
+
+# Falta lógica para segundos menores que zero (hora no futuro)
+# Aceitar parametros de warning e critical (fazer função)
 
 FB_RESULT_DATAHORA=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 select current_timestamp from RDB\$DATABASE;;
@@ -124,32 +145,26 @@ HORA_FIREBIRD=`echo $FB_RESULT_DATAHORA | cut -d " " -f 3-`
 HORA_FIREBIRD_TIMESTAMP=`date +%s -d "$HORA_FIREBIRD"`
 HORA_SERVIDOR_TIMESTAMP=`date +%s -d "$HORA_SERVIDOR"`
 
-datediff=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
+DATEDIFF=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
+MINUTES=$(($DATEDIFF/60))
 
-#number of seconds in a minute
-sinm=60
-minutes=$(($datediff/$sinm))
-#number of seconds in an hour
-sinh=3600
-hours=$(($datediff/$sinh))
-#number of seconds in a day
-sind=86400
-days=$(($datediff/$sind))
-
-    if [ $minutes -gt $CRITICAL ]; then
-        echo "CRITICAL: $minutes seconds"
+    if [ $DATEDIFF -gt $CRITICAL ]; then
+        echo "CRITICAL: $DATEDIFF seconds"
         exit $NAGIOS_CRITICAL
-    elif [ $minutes -gt $WARNING ]; then
-        echo "WARNING: $minutes seconds"
+    elif [ $DATEDIFF -gt $WARNING ]; then
+        echo "WARNING: $DATEDIFF seconds"
         exit $NAGIOS_WARNING
     else
-        echo "OK: $minutes seconds"
+        echo "OK: $DATEDIFF seconds"
         exit $NAGIOS_OK
     fi
 
 }
 
 case "$ACTION" in
+    connection)
+        connection
+        ;;
     timesync)
         timesync
         ;;
