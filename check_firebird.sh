@@ -107,9 +107,20 @@ if [ -z $ACTION ]; then
     exit $NAGIOS_UNKNOWN
 fi
 
+function parametersnull { if [ -z $WARNING -o -z $CRITICAL ]; then echo "Necessario passar parametros"; exit $NAGIOS_UNKNOWN; fi }
+function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING maior que CRITICAL"; exit $NAGIOS_UNKNOWN; fi }
+
+function check_parameters {
+parametersnull
+parametersincorrets
+}
+
 function connection {
 # Simple connection check.
 
+check_parameters
+
+exit 0
 FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 SHOW DATABASE;
 EOF
