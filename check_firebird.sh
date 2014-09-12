@@ -103,24 +103,20 @@ while test -n "$1"; do
 done
 
 if [ -z $ACTION ]; then
-    echo "Necessário informar a ação desejada."
+    echo "Necessary to inform the desired action."
     exit $NAGIOS_UNKNOWN
 fi
 
-function parametersnull { if [ -z $WARNING -o -z $CRITICAL ]; then echo "Necessario passar parametros"; exit $NAGIOS_UNKNOWN; fi }
-function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING maior que CRITICAL"; exit $NAGIOS_UNKNOWN; fi }
+function parametersnull { if [ -z $WARNING ] || [ -z $CRITICAL ]; then echo "Parameters of WARNING and CRITICAL are needed."; exit $NAGIOS_UNKNOWN; fi }
+function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING must be less than CRITICAL."; exit $NAGIOS_UNKNOWN; fi }
 
 function check_parameters {
-parametersnull
-parametersincorrets
+    parametersnull;
+    parametersincorrets;
 }
 
 function connection {
-# Simple connection check.
 
-check_parameters
-
-exit 0
 FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 SHOW DATABASE;
 EOF
@@ -138,8 +134,7 @@ exit $NAGIOS_OK
 function timesync {
 #Compare database time to local system time
 
-# Falta lógica para segundos menores que zero (hora no futuro)
-# Aceitar parametros de warning e critical (fazer função)
+check_parameters;
 
 FB_RESULT_DATAHORA=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 select current_timestamp from RDB\$DATABASE;;
@@ -169,7 +164,6 @@ MINUTES=$(($DATEDIFF/60))
         echo "OK: $DATEDIFF seconds"
         exit $NAGIOS_OK
     fi
-
 }
 
 case "$ACTION" in
