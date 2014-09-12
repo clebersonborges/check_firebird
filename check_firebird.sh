@@ -93,6 +93,11 @@ while test -n "$1"; do
             ACTION=$2
             shift
             ;;
+        --query|-q)
+            set -f
+            CUSTOM_QUERY="$2"
+            shift
+            ;;
         *)
             echo "Unknown argument: $1"
             print_help
@@ -109,6 +114,7 @@ fi
 
 function parametersnull { if [ -z $WARNING ] || [ -z $CRITICAL ]; then echo "Parameters of WARNING and CRITICAL are needed."; exit $NAGIOS_UNKNOWN; fi }
 function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING must be less than CRITICAL."; exit $NAGIOS_UNKNOWN; fi }
+function verifyquery { if [ -z $CUSTOM_QUERY ]; then echo "Necessary --query parameter."; exit $NAGIOS_UNKNOWN; fi }
 
 function check_parameters {
     parametersnull;
@@ -166,12 +172,30 @@ MINUTES=$(($DATEDIFF/60))
     fi
 }
 
+function custom_query {
+# Custom query in FirebirdSQL
+# 1 - connect
+# 2 - Execute the function
+# 3 - Show the result (with formating) 
+check_parameters;
+verifyquery;
+
+FB_RESULT_QUERY=`echo "set list ;  $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
+FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
+
+echo "O meu resultado final é $FB_RESULT_FINAL"
+
+}
+
 case "$ACTION" in
     connection)
         connection
         ;;
     timesync)
         timesync
+        ;;
+    custom_query)
+        custom_query
         ;;
     *)
         echo "Unknown argument: $1"
