@@ -39,20 +39,20 @@ print_help() {
 
 if [ ! -x "$WGET" ]
 then
-	echo "wget not found!"
-	exit $NAGIOS_CRITICAL
+    echo "wget not found!"
+    exit $NAGIOS_CRITICAL
 fi
 
 if [ ! -x "$GREP" ]
 then
-	echo "grep not found!"
-	exit $NAGIOS_CRITICAL
+    echo "grep not found!"
+    exit $NAGIOS_CRITICAL
 fi
 
 if test -z "$1"
 then
-	print_help
-	exit $NAGIOS_CRITICAL
+    print_help
+    exit $NAGIOS_CRITICAL
 fi
 
 while test -n "$1"; do
@@ -98,6 +98,11 @@ while test -n "$1"; do
             CUSTOM_QUERY="$2"
             shift
             ;;
+        --valtype|-v)
+            set -f
+            VALTYPE="$2"
+            shift
+            ;;
         *)
             echo "Unknown argument: $1"
             print_help
@@ -114,14 +119,50 @@ fi
 
 function parametersnull { if [ -z $WARNING ] || [ -z $CRITICAL ]; then echo "Parameters of WARNING and CRITICAL are needed."; exit $NAGIOS_UNKNOWN; fi }
 function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING must be less than CRITICAL."; exit $NAGIOS_UNKNOWN; fi }
-function verifyquery { if [ -z $CUSTOM_QUERY ]; then echo "Necessary --query parameter."; exit $NAGIOS_UNKNOWN; fi }
+function verifyquery { if [ -z "$CUSTOM_QUERY" ]; then echo "Necessary --query parameter."; exit $NAGIOS_UNKNOWN; fi }
+
+function check_connection { 
+    # Verificar conexao tcp especificada $HORA_FIREBIRD na porta 3050
+    if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
+        echo "There is no connection to the server FirebirdSQL!"
+        exit $NAGIOS_UNKNOWN
+    fi
+}
 
 function check_parameters {
     parametersnull;
     parametersincorrets;
 }
 
+# VALIDACAO DO RETORNO
+function valtype() {
+value=$1
+case "$VALTYPE" in
+    integer)
+        if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
+            echo 0;
+        else
+            echo 1;
+        fi
+        ;;
+    string)
+        echo 1;
+        ;;
+    date)
+        return "time"
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        print_help
+        exit $ST_UK
+        ;;
+esac
+}
+
+
 function connection {
+
+check_connection;
 
 FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 SHOW DATABASE;
@@ -141,6 +182,7 @@ function timesync {
 #Compare database time to local system time
 
 check_parameters;
+check_connection;
 
 FB_RESULT_DATAHORA=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 select current_timestamp from RDB\$DATABASE;;
@@ -152,13 +194,13 @@ if [ $RETVAL -eq 1 ]; then
         exit $NAGIOS_CRITICAL
 fi
 
-HORA_SERVIDOR=`date +"%Y-%m-%d %H:%M:%S.%s"`
-HORA_FIREBIRD=`echo $FB_RESULT_DATAHORA | cut -d " " -f 3-`
-HORA_FIREBIRD_TIMESTAMP=`date +%s -d "$HORA_FIREBIRD"`
-HORA_SERVIDOR_TIMESTAMP=`date +%s -d "$HORA_SERVIDOR"`
+    HORA_SERVIDOR=`date +"%Y-%m-%d %H:%M:%S.%s"`
+    HORA_FIREBIRD=`echo $FB_RESULT_DATAHORA | cut -d " " -f 3-`
+    HORA_FIREBIRD_TIMESTAMP=`date +%s -d "$HORA_FIREBIRD"`
+    HORA_SERVIDOR_TIMESTAMP=`date +%s -d "$HORA_SERVIDOR"`
 
-DATEDIFF=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
-MINUTES=$(($DATEDIFF/60))
+    DATEDIFF=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
+    MINUTES=$(($DATEDIFF/60))
 
     if [ $DATEDIFF -gt $CRITICAL ]; then
         echo "CRITICAL: $DATEDIFF seconds"
@@ -178,10 +220,14 @@ function custom_query {
 # 2 - Execute the function
 # 3 - Show the result (with formating) 
 check_parameters;
+check_connection;
 verifyquery;
 
 FB_RESULT_QUERY=`echo "set list ;  $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
 FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
+
+VALIDATE_RETURN=`valtype $FB_RESULT_FINAL`
+if [ $VALIDATE_RETURN -eq 0 ]; then echo "String returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
 echo "O meu resultado final é $FB_RESULT_FINAL"
 
