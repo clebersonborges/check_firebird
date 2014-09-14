@@ -11,6 +11,8 @@ VERSION="Version 0.01"
 
 WGET=/usr/bin/wget
 GREP=/bin/grep
+NC=/bin/nc
+
 
 print_version() {
     echo "$VERSION"
@@ -37,17 +39,9 @@ print_help() {
     exit $ST_UK
 }
 
-if [ ! -x "$WGET" ]
-then
-    echo "wget not found!"
-    exit $NAGIOS_CRITICAL
-fi
-
-if [ ! -x "$GREP" ]
-then
-    echo "grep not found!"
-    exit $NAGIOS_CRITICAL
-fi
+if [ ! -x "$WGET" ]; then echo "wget not found. sudo apt-get install wget"; exit $NAGIOS_CRITICAL; fi
+if [ ! -x "$GREP" ]; then echo "grep not found.\nsudo apt-get install grep"; exit $NAGIOS_CRITICAL; fi
+if [ ! -x "$NC" ]; then echo -e "nc not found.\nsudo apt-get install nc"; exit $NAGIOS_CRITICAL; fi
 
 if test -z "$1"
 then
@@ -108,7 +102,7 @@ while test -n "$1"; do
             print_help
             exit $ST_UK
             ;;
-        esac
+            esac
     shift
 done
 
@@ -121,11 +115,11 @@ function parametersnull { if [ -z $WARNING ] || [ -z $CRITICAL ]; then echo "Par
 function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING must be less than CRITICAL."; exit $NAGIOS_UNKNOWN; fi }
 function verifyquery { if [ -z "$CUSTOM_QUERY" ]; then echo "Necessary --query parameter."; exit $NAGIOS_UNKNOWN; fi }
 
-function check_connection { 
+    function check_connection { 
     # Verificar conexao tcp especificada $HORA_FIREBIRD na porta 3050
     if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
-        echo "There is no connection to the server FirebirdSQL!"
-        exit $NAGIOS_UNKNOWN
+        echo "There is no connection to the server FirebirdSQL!";
+        exit $NAGIOS_UNKNOWN;
     fi
 }
 
@@ -135,7 +129,7 @@ function check_parameters {
 }
 
 # VALIDACAO DO RETORNO
-function valtype() {
+function validate_valtype() {
 value=$1
 case "$VALTYPE" in
     integer)
@@ -146,15 +140,25 @@ case "$VALTYPE" in
         fi
         ;;
     string)
-        echo 1;
+        echo 0;
         ;;
-    date)
-        return "time"
+    seconds)
+        if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
+            echo 0;
+        else
+            echo 1;
+        fi
+        ;;
+    days|day)
+        if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
+            echo 0;
+        else
+            echo 1;
+        fi
         ;;
     *)
-        echo "Unknown argument: $1"
-        print_help
-        exit $ST_UK
+        echo 0;
+        exit $NAGIOS_UNKNOWN
         ;;
 esac
 }
@@ -223,13 +227,20 @@ check_parameters;
 check_connection;
 verifyquery;
 
-FB_RESULT_QUERY=`echo "set list ;  $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
+FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
 FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
 
-VALIDATE_RETURN=`valtype $FB_RESULT_FINAL`
-if [ $VALIDATE_RETURN -eq 0 ]; then echo "String returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
+VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
+if [ $VALIDATE_RETURN -eq 0 ]; then echo "String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
-echo "O meu resultado final é $FB_RESULT_FINAL"
+if [ $VALTYPE == "seconds" ]; then UNIT="seconds"; fi
+if [ $VALTYPE == "days" -o $VALTYPE == "day" ]; then UNIT="days"; fi
+if [ $VALTYPE == "integer" ]; then UNIT="integer"; fi
+
+
+echo
+echo "O meu resultado final é $FB_RESULT_FINAL $UNIT."
+echo
 
 }
 
