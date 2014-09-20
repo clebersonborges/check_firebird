@@ -27,20 +27,31 @@ print_help() {
     echo ""
     echo "Options:"
     echo "  -H/--host)"
-    echo "     Host Name of the server"
+    echo "      Host Name of the server"
     echo "  -u/--user)"
-    echo "     User name for authentication on Tomcat Manager Application"
+    echo "      User name for authentication on Tomcat Manager Application"
     echo "  -p/--password)"
-    echo "     Password for authentication on Tomcat Manager Application"
+    echo "      Password for authentication on Tomcat Manager Application"
     echo "  -a/--action)"
-    echo "     Actions (connection)"
+    echo "      Actions (connection, timesync, custom_query)"
+    echo "          connection - Test connection"
+    echo "          timesync - Verifies the connection between the server and the database"
+    echo "          custom_query - Customized query. Required --query option"
+    echo "  -q/--query)"
+    echo "      SQL query returning a specified by --valype value"
+    echo "  -v/--valtype)"
+    echo "      Specifies the value returned"
+    echo "          seconds - expects a value in seconds"
+    echo "          days - expects a value in days"
+    echo "          integer - expects a value integer"
+    echo "          string - under construction"
     echo "  -d/--database)"
-    echo "     Database"
+    echo "      Database"
     exit $ST_UK
 }
 
-if [ ! -x "$WGET" ]; then echo "wget not found. sudo apt-get install wget"; exit $NAGIOS_CRITICAL; fi
-if [ ! -x "$GREP" ]; then echo "grep not found.\nsudo apt-get install grep"; exit $NAGIOS_CRITICAL; fi
+if [ ! -x "$WGET" ]; then echo -e "wget not found.\nsudo apt-get install wget"; exit $NAGIOS_CRITICAL; fi
+if [ ! -x "$GREP" ]; then echo -e "grep not found.\nsudo apt-get install grep"; exit $NAGIOS_CRITICAL; fi
 if [ ! -x "$NC" ]; then echo -e "nc not found.\nsudo apt-get install nc"; exit $NAGIOS_CRITICAL; fi
 
 if test -z "$1"
@@ -118,7 +129,7 @@ function verifyquery { if [ -z "$CUSTOM_QUERY" ]; then echo "Necessary --query p
     function check_connection { 
     # Verificar conexao tcp especificada $HORA_FIREBIRD na porta 3050
     if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
-        echo "There is no connection to the server FirebirdSQL!";
+        echo "FIREBIRD_CONNECTION UNKNOWN: DB \"$DATABASE\" (host:$HOST) error.";
         exit $NAGIOS_UNKNOWN;
     fi
 }
@@ -174,11 +185,11 @@ EOF
 `
 RETVAL=$?
 if [ $RETVAL -eq 1 ]; then
-        echo "Nao foi possivel conexao com a base de dados $HOST:$DATABASE"
+        echo "FIREBIRD_CONNECTION CRITICAL: DB \"$DATABASE\" (host:$HOST) error."
         exit $NAGIOS_CRITICAL
 fi
 
-echo "OK: Connection to the database successfully established."
+echo "FIREBIRD_CONNECTION OK: DB \"$DATABASE\" (host:$HOST) successfully established."
 exit $NAGIOS_OK
 }
 
@@ -194,7 +205,7 @@ EOF
 `
 RETVAL=$?
 if [ $RETVAL -eq 1 ]; then
-        echo "Nao foi possivel conexao com a base de dados $HOST:$DATABASE"
+        echo "POSTGRES_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) error connection."
         exit $NAGIOS_CRITICAL
 fi
 
@@ -207,15 +218,16 @@ fi
     MINUTES=$(($DATEDIFF/60))
 
     if [ $DATEDIFF -gt $CRITICAL ]; then
-        echo "CRITICAL: $DATEDIFF seconds"
+        echo "POSTGRES_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_CRITICAL
     elif [ $DATEDIFF -gt $WARNING ]; then
-        echo "WARNING: $DATEDIFF seconds"
+        echo "POSTGRES_TIMESYNC WARNING: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_WARNING
     else
-        echo "OK: $DATEDIFF seconds"
+	echo "POSTGRES_TIMESYNC OK: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_OK
     fi
+
 }
 
 function custom_query {
@@ -231,15 +243,14 @@ FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password
 FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
 
 VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
-if [ $VALIDATE_RETURN -eq 0 ]; then echo "String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
+if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
-if [ $VALTYPE == "seconds" ]; then UNIT="seconds"; fi
-if [ $VALTYPE == "days" -o $VALTYPE == "day" ]; then UNIT="days"; fi
-if [ $VALTYPE == "integer" ]; then UNIT="integer"; fi
-
+#if [ $VALTYPE == "seconds" ]; then UNIT="seconds"; fi
+#if [ $VALTYPE == "days" -o $VALTYPE == "day" ]; then UNIT="days"; fi
+#if [ $VALTYPE == "integer" ]; then UNIT="integer"; fi
 
 echo
-echo "O meu resultado final é $FB_RESULT_FINAL $UNIT."
+echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL"
 echo
 
 }
