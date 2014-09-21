@@ -7,7 +7,7 @@ NAGIOS_CRITICAL=2
 NAGIOS_UNKNOWN=3
 
 PROGNAME=`basename $0 .sh`
-VERSION="Version 0.01"
+VERSION="Version 0.02"
 
 WGET=/usr/bin/wget
 GREP=/bin/grep
@@ -23,7 +23,7 @@ print_help() {
     echo ""
     echo "$PROGNAME is a Nagios plugin to check a specific Firebird Servers."
     echo ""
-    echo "$PROGNAME -u user -p password -H host -P port -a action"
+    echo "$PROGNAME -u user -p password -H host -a action"
     echo ""
     echo "Options:"
     echo "  -H/--host)"
@@ -249,7 +249,7 @@ if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
     check_parameters;
     FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
     VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
-    
+
     if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
     if [ $FB_RESULT_FINAL -gt $CRITICAL ]; then
