@@ -12,7 +12,7 @@ VERSION="Version 0.02"
 WGET=/usr/bin/wget
 GREP=/bin/grep
 NC=/bin/nc
-
+ISQLFB=/usr/bin/isql-fb
 
 print_version() {
     echo "$VERSION"
@@ -57,6 +57,7 @@ print_help() {
 if [ ! -x "$WGET" ]; then echo -e "wget not found.\nsudo apt-get install wget"; exit $NAGIOS_CRITICAL; fi
 if [ ! -x "$GREP" ]; then echo -e "grep not found.\nsudo apt-get install grep"; exit $NAGIOS_CRITICAL; fi
 if [ ! -x "$NC" ]; then echo -e "nc not found.\nsudo apt-get install nc"; exit $NAGIOS_CRITICAL; fi
+if [ ! -x "$ISQLFB" ]; then echo -e "isql-fb not found.\nsudo apt-get install firebird2.5-classic-common"; exit $NAGIOS_CRITICAL; fi
 
 if test -z "$1"
 then
@@ -187,7 +188,7 @@ function connection {
 
 check_connection;
 
-FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
+FB_RESULT_CONNECTION=`$ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 SHOW DATABASE;
 EOF
 `
@@ -207,7 +208,7 @@ function timesync {
 check_parameters;
 check_connection;
 
-FB_RESULT_DATAHORA=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
+FB_RESULT_DATAHORA=`$ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 select current_timestamp from RDB\$DATABASE;;
 EOF
 `
@@ -243,7 +244,7 @@ function custom_query {
 check_connection;
 verifyquery;
 
-FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
+FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | $ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE`
 
 if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
     check_parameters;
