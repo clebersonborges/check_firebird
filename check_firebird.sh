@@ -32,6 +32,8 @@ print_help() {
     echo "      User name for authentication on Tomcat Manager Application"
     echo "  -p/--password)"
     echo "      Password for authentication on Tomcat Manager Application"
+    echo "  -d/--database)"
+    echo "      Database"
     echo "  -a/--action)"
     echo "      Actions (connection, timesync, custom_query)"
     echo "          connection - Test connection"
@@ -49,8 +51,6 @@ print_help() {
     echo "              -w/--warning and -c/--critical necessary."
     echo "          string - under construction"
     echo "              -e/--expected) Expect string"
-    echo "  -d/--database)"
-    echo "      Database"
     exit $ST_UK
 }
 
@@ -154,8 +154,8 @@ case "$VALTYPE" in
         if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
             echo 0;
         else
+
             echo 1;
-            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
         fi
         ;;
     string)
@@ -165,7 +165,6 @@ case "$VALTYPE" in
         if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
             echo 0;
         else
-            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
             echo 1;
         fi
         ;;
@@ -173,7 +172,6 @@ case "$VALTYPE" in
         if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
             echo 0;
         else
-            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
             echo 1;
         fi
         ;;
@@ -247,12 +245,13 @@ verifyquery;
 
 FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
 
-VALIDATE_RETURN=`validate_valtype $FB_RESULT_QUERY`
-
-if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
-
 if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
     check_parameters;
+    FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
+    VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
+    
+    if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
+
     if [ $FB_RESULT_FINAL -gt $CRITICAL ]; then
         echo "POSTGRES_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_CRITICAL;
