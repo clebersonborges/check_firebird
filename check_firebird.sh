@@ -42,9 +42,13 @@ print_help() {
     echo "  -v/--valtype)"
     echo "      Specifies the value returned"
     echo "          seconds - expects a value in seconds"
+    echo "              -w/--warning and -c/--critical necessary."
     echo "          days - expects a value in days"
+    echo "              -w/--warning and -c/--critical necessary."
     echo "          integer - expects a value integer"
+    echo "              -w/--warning and -c/--critical necessary."
     echo "          string - under construction"
+    echo "              -e/--expected) Expect string"
     echo "  -d/--database)"
     echo "      Database"
     exit $ST_UK
@@ -104,8 +108,11 @@ while test -n "$1"; do
             shift
             ;;
         --valtype|-v)
-            set -f
             VALTYPE="$2"
+            shift
+            ;;
+        --expected|-e)
+            EXPECTED_STRING="$2"
             shift
             ;;
         *)
@@ -125,13 +132,13 @@ fi
 function parametersnull { if [ -z $WARNING ] || [ -z $CRITICAL ]; then echo "Parameters of WARNING and CRITICAL are needed."; exit $NAGIOS_UNKNOWN; fi }
 function parametersincorrets { if [ $WARNING -ge $CRITICAL ]; then echo "WARNING must be less than CRITICAL."; exit $NAGIOS_UNKNOWN; fi }
 function verifyquery { if [ -z "$CUSTOM_QUERY" ]; then echo "Necessary --query parameter."; exit $NAGIOS_UNKNOWN; fi }
+function parameterexpected { if [ -z $EXPECTED_STRING ]; then echo "Necessary --expected parameter."; exit $NAGIOS_UNKNOWN; fi }
 
-    function check_connection { 
-    # Verificar conexao tcp especificada $HORA_FIREBIRD na porta 3050
-    if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
-        echo "FIREBIRD_CONNECTION UNKNOWN: DB \"$DATABASE\" (host:$HOST) error.";
-        exit $NAGIOS_UNKNOWN;
-    fi
+function check_connection { 
+if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
+    echo "FIREBIRD_CONNECTION UNKNOWN: DB \"$DATABASE\" (host:$HOST) error.";
+    exit $NAGIOS_UNKNOWN;
+fi
 }
 
 function check_parameters {
@@ -148,15 +155,17 @@ case "$VALTYPE" in
             echo 0;
         else
             echo 1;
+            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
         fi
         ;;
     string)
-        echo 0;
+        echo 1;
         ;;
     seconds)
         if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
             echo 0;
         else
+            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
             echo 1;
         fi
         ;;
@@ -164,6 +173,7 @@ case "$VALTYPE" in
         if [ -n "$(echo $value | sed 's/[+-]*[0-9][0-9]*//')" ] ; then
             echo 0;
         else
+            FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
             echo 1;
         fi
         ;;
@@ -231,28 +241,35 @@ fi
 }
 
 function custom_query {
-# Custom query in FirebirdSQL
-# 1 - connect
-# 2 - Execute the function
-# 3 - Show the result (with formating) 
-check_parameters;
+
 check_connection;
 verifyquery;
 
 FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
-FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
 
-VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
+VALIDATE_RETURN=`validate_valtype $FB_RESULT_QUERY`
+
 if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
-#if [ $VALTYPE == "seconds" ]; then UNIT="seconds"; fi
-#if [ $VALTYPE == "days" -o $VALTYPE == "day" ]; then UNIT="days"; fi
-#if [ $VALTYPE == "integer" ]; then UNIT="integer"; fi
-
-echo
-echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL"
-echo
-
+if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
+    check_parameters;
+    if [ $FB_RESULT_FINAL -gt $CRITICAL ]; then
+        echo "POSTGRES_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        exit $NAGIOS_CRITICAL;
+    elif [ $FB_RESULT_FINAL -gt $WARNING ]; then
+        echo "POSTGRES_CUSTOM_QUERY WARNING: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        exit $NAGIOS_WARNING;
+    else
+        echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        exit $NAGIOS_OK;
+    fi
+elif [ $VALTYPE == "string" ]; then
+    if [ `echo $FB_RESULT_QUERY | grep $EXPECTED_STRING | wc -l` -gt 0 ]; then
+        echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") String $EXPECTED_STRING found.";
+    else
+        echo "POSTGRES_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $EXPECTED_STRING not found.";        
+    fi
+fi
 }
 
 case "$ACTION" in
