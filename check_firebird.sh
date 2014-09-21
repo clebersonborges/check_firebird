@@ -226,10 +226,10 @@ fi
     DATEDIFF=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
     MINUTES=$(($DATEDIFF/60))
 
-    if [ $DATEDIFF -gt $CRITICAL ]; then
+    if [ $DATEDIFF -ge $CRITICAL ]; then
         echo "POSTGRES_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_CRITICAL
-    elif [ $DATEDIFF -gt $WARNING ]; then
+    elif [ $DATEDIFF -ge $WARNING ]; then
         echo "POSTGRES_TIMESYNC WARNING: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_WARNING
     else
