@@ -12,7 +12,7 @@ VERSION="Version 0.02"
 WGET=/usr/bin/wget
 GREP=/bin/grep
 NC=/bin/nc
-ISQLFB=/usr/bin/isql-fb
+
 
 print_version() {
     echo "$VERSION"
@@ -57,7 +57,6 @@ print_help() {
 if [ ! -x "$WGET" ]; then echo -e "wget not found.\nsudo apt-get install wget"; exit $NAGIOS_CRITICAL; fi
 if [ ! -x "$GREP" ]; then echo -e "grep not found.\nsudo apt-get install grep"; exit $NAGIOS_CRITICAL; fi
 if [ ! -x "$NC" ]; then echo -e "nc not found.\nsudo apt-get install nc"; exit $NAGIOS_CRITICAL; fi
-if [ ! -x "$ISQLFB" ]; then echo -e "isql-fb not found.\nsudo apt-get install firebird2.5-classic-common"; exit $NAGIOS_CRITICAL; fi
 
 if test -z "$1"
 then
@@ -136,7 +135,7 @@ function verifyquery { if [ -z "$CUSTOM_QUERY" ]; then echo "Necessary --query p
 function parameterexpected { if [ -z $EXPECTED_STRING ]; then echo "Necessary --expected parameter."; exit $NAGIOS_UNKNOWN; fi }
 
 function check_connection { 
-if [ `nc $HOST 3050 < /dev/null; echo $?` != 0 ]; then
+if [ `nc -z $HOST 3050 < /dev/null; echo $?` != 0 ]; then
     echo "FIREBIRD_CONNECTION UNKNOWN: DB \"$DATABASE\" (host:$HOST) error.";
     exit $NAGIOS_UNKNOWN;
 fi
@@ -188,7 +187,7 @@ function connection {
 
 check_connection;
 
-FB_RESULT_CONNECTION=`$ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
+FB_RESULT_CONNECTION=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 SHOW DATABASE;
 EOF
 `
@@ -208,13 +207,13 @@ function timesync {
 check_parameters;
 check_connection;
 
-FB_RESULT_DATAHORA=`$ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
+FB_RESULT_DATAHORA=`isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE << "EOF"
 select current_timestamp from RDB\$DATABASE;;
 EOF
 `
 RETVAL=$?
 if [ $RETVAL -eq 1 ]; then
-        echo "POSTGRES_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) error connection."
+        echo "FIREBIRD_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) error connection."
         exit $NAGIOS_CRITICAL
 fi
 
@@ -226,48 +225,48 @@ fi
     DATEDIFF=$(($HORA_SERVIDOR_TIMESTAMP-$HORA_FIREBIRD_TIMESTAMP))
     MINUTES=$(($DATEDIFF/60))
 
-    if [ $DATEDIFF -ge $CRITICAL ]; then
-        echo "POSTGRES_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
+    if [ $DATEDIFF -gt $CRITICAL ]; then
+        echo "FIREBIRD_TIMESYNC CRITICAL: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_CRITICAL
-    elif [ $DATEDIFF -ge $WARNING ]; then
-        echo "POSTGRES_TIMESYNC WARNING: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
+    elif [ $DATEDIFF -gt $WARNING ]; then
+        echo "FIREBIRD_TIMESYNC WARNING: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_WARNING
     else
-	echo "POSTGRES_TIMESYNC OK: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
+	echo "FIREBIRD_TIMESYNC OK: Database: \"$DATABASE\" (host:$HOST) timediff=$DATEDIFF DB=$HORA_FIREBIRD Local=$HORA_SERVIDOR"
         exit $NAGIOS_OK
     fi
 
 }
 
 function custom_query {
-
 check_connection;
+
 verifyquery;
 
-FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | $ISQLFB -user $USER -password $PASSWORD $HOST:$DATABASE`
+FB_RESULT_QUERY=`echo "set list; $CUSTOM_QUERY;" | isql-fb -user $USER -password $PASSWORD $HOST:$DATABASE`
 
 if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
     check_parameters;
-    FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ ]//g'`
+    FB_RESULT_FINAL=`echo $FB_RESULT_QUERY | sed -e 's/[a-zA-Z\ \_\-]//g'`
     VALIDATE_RETURN=`validate_valtype $FB_RESULT_FINAL`
 
-    if [ $VALIDATE_RETURN -eq 0 ]; then echo "POSTGRES_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
+    if [ $VALIDATE_RETURN -eq 0 ]; then echo "FIREBIRD_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
     if [ $FB_RESULT_FINAL -gt $CRITICAL ]; then
-        echo "POSTGRES_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        echo "FIREBIRD_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_CRITICAL;
     elif [ $FB_RESULT_FINAL -gt $WARNING ]; then
-        echo "POSTGRES_CUSTOM_QUERY WARNING: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        echo "FIREBIRD_CUSTOM_QUERY WARNING: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_WARNING;
     else
-        echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
+        echo "FIREBIRD_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_OK;
     fi
 elif [ $VALTYPE == "string" ]; then
     if [ `echo $FB_RESULT_QUERY | grep $EXPECTED_STRING | wc -l` -gt 0 ]; then
-        echo "POSTGRES_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") String $EXPECTED_STRING found.";
+        echo "FIREBIRD_CUSTOM_QUERY OK: Database: \"$DATABASE\" (host: \"$HOST\") String $EXPECTED_STRING found.";
     else
-        echo "POSTGRES_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $EXPECTED_STRING not found.";        
+        echo "FIREBIRD_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $EXPECTED_STRING not found.";        
     fi
 fi
 }
