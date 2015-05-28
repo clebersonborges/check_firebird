@@ -252,10 +252,10 @@ if [ $VALTYPE == "seconds" -o $VALTYPE == "day" -o $VALTYPE == "integer" ]; then
 
     if [ $VALIDATE_RETURN -eq 0 ]; then echo "FIREBIRD_CUSTOM_QUERY UNKNOWN: Database: \"$DATABASE\" (host: \"$HOST\") String or type of argument returned is not valid!"; exit $NAGIOS_UNKNOWN; fi
 
-    if [ $FB_RESULT_FINAL -gt $CRITICAL ]; then
+    if [ $FB_RESULT_FINAL -ge $CRITICAL ]; then
         echo "FIREBIRD_CUSTOM_QUERY CRITICAL: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_CRITICAL;
-    elif [ $FB_RESULT_FINAL -gt $WARNING ]; then
+    elif [ $FB_RESULT_FINAL -ge $WARNING ]; then
         echo "FIREBIRD_CUSTOM_QUERY WARNING: Database: \"$DATABASE\" (host: \"$HOST\") $FB_RESULT_FINAL";
         exit $NAGIOS_WARNING;
     else
